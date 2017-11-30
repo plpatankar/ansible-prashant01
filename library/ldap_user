@@ -1,0 +1,338 @@
+#!/usr/bin/python
+
+import syslog
+import tempfile
+
+class User(object):
+   
+    def __new__(cls, *args, **kwargs):
+        return load_platform_subclass(User, args, kwargs)
+
+    def __init__(self, module):
+    	self.module = module
+    	self.name = module.params['user_name']
+        self.password = module.params['user_password']
+        self.email = module.params['user_email']
+        self.givenname = module.params['user_givenname']
+        self.surname = module.params['user_surname']
+        self.groups = module.params['groups']
+        self.state = module.params['state']
+        self.ldap_base = module.params['ldap_base']
+        self.debug = False
+    
+    def user_exists(self):
+        return self.search_user_by_name() is not None
+
+    def group_exists(self, group_name):
+        return self.search_group_by_name(group_name) is not None
+
+    def create_user(self):
+        if (not self.group_exists(self.name)):
+            rc, out, err = self.create_group(self.name)
+            self.check_rc(rc, err)
+        
+        rc, out, err = self.execute_ldap_add(self.user_ldif())
+        self.check_rc(rc, err)
+        
+        self.modify_groups(self.groups)
+        return rc, out, err 
+
+    def create_group(self, group_name):
+        return self.execute_ldap_add(self.group_ldif(group_name))
+
+    def modify_user(self):
+        rc, out, err = self.execute_ldap_modify(self.user_modify_ldif())
+        self.check_rc(rc, err)
+        
+        self.modify_groups(self.groups);
+        return rc, out, err
+
+    def modify_groups(self, groups):
+        current_groups = self.get_groups()
+        new_groups = []
+        
+        if (groups != ''):
+            new_groups = map(lambda x: x.strip(), groups.split(','))
+
+        groups_to_join = [group for group in new_groups if group not in current_groups]
+        groups_to_leave = [group for group in current_groups if group not in new_groups]
+
+        ldif = []
+    	for group in groups_to_join:
+            if (not self.group_exists(group)):
+                rc1, out1, err1 = self.create_group(group)
+                self.check_rc(rc1, err1)
+            ldif += self.group_modify_ldif(group, join_a_group=True)
+            ldif += ['\n']
+
+        for group in groups_to_leave:
+            if (not self.group_exists(group)):
+                rc1, out1, err1 = self.create_group(group)
+                self.check_rc(rc1, err1)
+            ldif += self.group_modify_ldif(group, join_a_group=False)
+            ldif += ['\n']
+
+        rc, out, err = self.execute_ldap_modify(ldif)
+        self.check_rc(rc, err)
+ 	
+    def user_info(self):
+    	if not self.user_exists():
+            return None
+        return self.search_user_by_name()
+
+    def remove_user(self):
+        self.modify_groups('')
+        return self.execute_ldap_command('ldapdelete', [self.ldap_user_dn(), self.ldap_group_dn(self.name)])
+
+    def get_groups(self):
+        rc, out, err = self.execute_ldap_command('ldapsearch', ['-b', self.ldap_group_base(), 'memberUid=' + self.name ])
+        self.check_rc(rc, err)
+        return map(lambda x: x['cn'], self.parse_ldap_output(out))
+
+    def search_user_by_name(self):
+    	rc, out, err = self.execute_ldap_command('ldapsearch', ['-b', self.ldap_user_base(), self.ldap_user_id()])
+    	self.check_rc(rc, err)
+        entries = self.parse_ldap_output(out)
+        if (len(entries) == 0):
+        	return None
+        return entries[0]
+
+    def search_group_by_name(self, group_name):
+    	rc, out, err = self.execute_ldap_command('ldapsearch', ['-b', self.ldap_group_base(), self.ldap_cn(group_name)])
+    	self.check_rc(rc, err)
+        entries = self.parse_ldap_output(out)
+        if (len(entries) == 0):
+        	return None
+        return entries[0]
+
+    def user_ldif(self):
+        fullname = (self.givenname + ' ' + self.surname).strip()
+        if (fullname == ''):
+            self.module.fail_json(name=self.name, msg='Fullname should not be empty', rc=1)
+
+    	return [
+    	    'dn: ' + self.ldap_user_dn(),
+    	    'uid: ' + self.name,
+    	    'cn: ' + fullname,
+            'objectClass: top',
+            'objectClass: inetOrgPerson',
+            'objectClass: posixAccount',
+            'mail: ' + self.email,
+            'givenName: ' + self.givenname,
+            'surname: ' + self.surname,
+            'userPassword: ' + self.get_encripted_password(),
+            'uidNumber: ' + self.get_next_uid_number(),
+            'gidNumber: ' + self.get_gid_number(self.name),
+            'homeDirectory: /home/' + self.name,
+            'loginShell: /bin/bash',
+            'gecos: ' + self.name
+            ]
+
+    def group_ldif(self, group_name):
+    	return [
+    	    'dn: ' + self.ldap_group_dn(group_name),
+            'objectClass: posixGroup',
+            'objectClass: top',
+            'cn: ' + group_name,
+            'gidNumber: ' + self.get_next_gid_number()
+            ]
+
+    def user_modify_ldif(self):
+        return [
+            'dn: ' + self.ldap_user_dn(),
+            'changetype: modify',
+            'replace: userPassword',
+            'userPassword: ' + self.get_encripted_password()
+            ]
+    
+    def group_modify_ldif(self, group_name, join_a_group):
+    	ldif = [ 
+            'dn: ' + self.ldap_group_dn(group_name),
+            'changetype: modify']
+
+        if (join_a_group):
+            ldif.append('add: memberUid')
+            ldif.append('memberUid: ' + self.name)
+        else:
+            ldif.append('delete: memberUid')
+            ldif.append('memberUid: ' + self.name)    
+
+        return ldif
+
+    def get_encripted_password(self):
+    	cmd = ' '.join(['slappasswd', '-s', self.password])
+    	rc, out, err = self.execute_command(cmd)
+    	self.check_rc(rc, err)
+    	return (out.splitlines())[0]
+
+    def get_gid_number(self, group_name):
+        group_info = self.search_group_by_name(group_name)
+        if (group_info is None):
+        	return None
+        return group_info['gidNumber']
+
+    def	get_next_uid_number(self):
+        rc, out, err = self.execute_ldap_command('ldapsearch', ['-b', self.ldap_user_base(), 'uid=*'])
+        self.check_rc(rc, err)        
+    	return self.next_id(map(lambda x: int(x['uidNumber']), self.parse_ldap_output(out)))
+    
+    def get_next_gid_number(self):
+        rc, out, err = self.execute_ldap_command('ldapsearch', ['-b', self.ldap_group_base(), 'cn=*'])
+        self.check_rc(rc, err)
+        return self.next_id(map(lambda x: int(x['gidNumber']), self.parse_ldap_output(out)))
+    
+    def next_id(self, ids):
+        return str(max(ids + [10000]) + 1)
+
+    def ldap_user_dn(self):
+    	return self.ldap_user_id() + ',' + self.ldap_user_base()
+
+    def ldap_group_dn(self, group_name):
+        return self.ldap_cn(group_name) + ',' + self.ldap_group_base()
+    
+    def ldap_user_base(self):
+        return 'ou=People,' +  self.ldap_base
+
+    def ldap_group_base(self):
+        return 'ou=Group,' + self.ldap_base
+
+    def ldap_user_id(self):
+        return 'uid=' + self.name    
+    
+    def ldap_cn(self, cn):
+        return 'cn=' + cn
+
+    def parse_ldap_output(self, out):
+        entries = []
+        current_entry = None
+
+        for line in out.splitlines():
+        
+            if line.startswith('#') or line.startswith('\n'):
+                continue
+            
+            arr = line.split(':', 1)
+            if (len(arr) < 2):
+                continue
+            
+            attr = arr[0].strip()
+            value = arr[1].strip()
+
+            if line.startswith('dn:'):
+                current_entry={}
+                entries.append(current_entry)
+
+            if (current_entry is not None and len(arr) > 0):
+            	if (not hasattr(current_entry, attr)):
+            	    current_entry[attr] = value
+            	elif (not isinstance(current_entry[attr], list)):
+            	    current_entry[attr] = [current_entry[attr], value]
+            	else:
+            	    current_entry[attr].append(value)
+        
+        return entries
+
+    def check_rc(self, rc, err):
+    	if rc is not None and rc != 0:
+            self.module.fail_json(name=self.name, msg=err, rc=rc)
+    
+    def execute_ldap_add(self, ldif):
+        with tempfile.NamedTemporaryFile() as temp:
+            temp.write('\n'.join(ldif))
+            temp.flush()
+            return self.execute_ldap_command('ldapadd', ['-f', temp.name])
+    
+    def execute_ldap_modify(self, ldif):
+        with tempfile.NamedTemporaryFile() as temp:
+            temp.write('\n'.join(ldif))
+            temp.flush()
+            return self.execute_ldap_command('ldapmodify', ['-f', temp.name])
+
+    def execute_ldap_command(self, ldapcmd, ldapparams):
+        cmd = ' '.join([ldapcmd, '-Y EXTERNAL -H ldapi:///'] + ldapparams)
+        return self.execute_command(cmd)
+
+    def execute_command(self, cmd, use_unsafe_shell=False, data=None):
+    	self.syslog(cmd)
+        return self.module.run_command(cmd, use_unsafe_shell=use_unsafe_shell, data=data)
+
+    def syslog(self, log):
+    	if (self.debug):
+    	    syslog.openlog('ansible-%s' % os.path.basename(__file__))
+            syslog.syslog(syslog.LOG_NOTICE, 'Debug %s' % log)
+
+# ===========================================    
+
+def main():
+    module = AnsibleModule(
+        argument_spec=dict(
+            user_name=dict(required=True, default=None, type='str'),
+            user_password=dict(required=False, default=None, type='str'),
+            user_givenname=dict(required=False, default='', type='str'),
+            user_surname=dict(required=False, default='', type='str'),
+            user_email=dict(required=False, default='', type='str'),
+            groups=dict(required=False, default='', type='str'),
+            state = dict(default='present', choices=['present', 'absent']),
+            ldap_base = dict(required=True, default=None, type='str')
+        )
+    )
+
+    user = User(module)
+    
+    result = {}
+    result['name'] = user.name
+    result['state'] = user.state
+    
+    rc = None
+    out = ''
+    err = ''
+
+    if user.state == 'absent':
+        if user.user_exists():
+            if module.check_mode:
+                module.exit_json(changed=True)
+            (rc, out, err) = user.remove_user()
+            if rc != 0:
+                module.fail_json(name=user.name, msg=err, rc=rc)
+
+    elif user.state == 'present':
+        if not user.user_exists():
+            if module.check_mode:
+                module.exit_json(changed=True)
+            (rc, out, err) = user.create_user()
+        else:
+            (rc, out, err) = user.modify_user()
+
+        if rc is not None and rc != 0:
+            module.fail_json(name=user.name, msg=err, rc=rc)
+        if user.password is not None:
+            result['user_password'] = 'NOT_LOGGING_PASSWORD'
+
+    if rc is None:
+        result['changed'] = False
+    else:
+        result['changed'] = True
+    if out:
+        result['stdout'] = out
+    if err:
+        result['stderr'] = err
+
+    if user.user_exists():
+        info = user.user_info()
+        if info == False:
+            result['msg'] = "failed to look up user name: %s" % user.name
+            result['failed'] = True
+        result['uid'] = info['uid']
+        result['uidNumber'] = info['uidNumber']
+        result['gidNumber'] = info['gidNumber']
+        result['homeDirectory'] = info['homeDirectory']
+        result['loginShell'] = info['loginShell']
+        result['groups'] = user.groups
+
+    module.exit_json(**result)
+
+# ===========================================
+    
+# import module snippets
+from ansible.module_utils.basic import *
+main()

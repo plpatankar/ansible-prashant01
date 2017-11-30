@@ -1,0 +1,22 @@
+---
+- name: check if VG exists
+  shell: vgdisplay | grep "VG Name.*{{ vg_name }}" | wc -l
+  register: vgdisplay_out
+
+- set_fact: vg_create=true
+  when: vgdisplay_out.stdout_lines[0] | int == 0
+
+- debug: var=vg_create
+
+- name: create VG
+  shell: vgcreate {{ vg_name }} {{ partition }}
+  when: vg_create
+
+- name: check if VG contains the partition
+  shell: pvs --rows {{ partition }} | grep 'VG' | awk '{ split($0,a," "); print a[2] }' | wc -w
+  register: pvdisplay_out
+  when: not vg_create
+
+- name: extend VG with partition
+  shell: vgextend {{ vg_name }} {{ partition }}
+  when: (not vg_create) and (pvdisplay_out.stdout_lines[0] | int == 0)

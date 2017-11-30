@@ -1,0 +1,8 @@
+---
+- name: Playground vm setup
+  hosts: playground
+  roles: 
+    - { role: ldap_client }
+    - { role: nfs_client, nfs_with_ldap: true }
+    - { role: irods_icommands }
+  sudo: true

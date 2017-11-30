@@ -1,0 +1,6 @@
+---
+- name: pull ngseasy images
+  hosts: docker_openlava_nodes
+  sudo: true
+  roles: 
+    - pipelines_ngseasy

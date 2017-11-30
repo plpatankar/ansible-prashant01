@@ -1,0 +1,60 @@
+---
+- name: upgrade all packages
+  apt: update_cache=yes
+
+- name: install required packages
+  apt: pkg={{ item }} state=latest
+  with_items:
+  - python-psycopg2 
+  - postgresql 
+  - postgresql-contrib
+  - autopostgresqlbackup
+
+- name: make sure postgres is running
+  service: name=postgresql state=started enabled=yes
+
+- name: create icat DB
+  postgresql_db: name={{ irods_db_name }} state=present
+  sudo_user: postgres
+
+- name: create icat DB user
+  postgresql_user: name={{ irods_db_user }} password={{ irods_db_password }} db={{ irods_db_name }} priv=ALL encrypted=no state=present
+  sudo_user: postgres
+
+# allow remote user connections
+
+- name: find pg_hba.conf
+  command: find / -name pg_hba.conf
+  sudo: true
+  register: find_pg_hba
+
+- debug: var=find_pg_hba
+
+- name: add line to pg_hba.conf to allow password auth for local subnet users users 
+  lineinfile: 
+    dest: "{{ find_pg_hba.stdout_lines[0] }}" 
+    line: "host    all    all    192.168.1.0/24    md5"
+    state: present
+    backup: yes
+
+- name: find postgresql.conf
+  command: find / -name postgresql.conf
+  sudo: true
+  register: find_psql_conf
+
+- debug: var=find_psql_conf
+
+- name: add line to postgresql.conf to accept incomming connections from any addresses
+  lineinfile: 
+    dest: "{{ find_psql_conf.stdout_lines[0] }}" 
+    line: "listen_addresses = '*'"
+    insertbefore: "#listen_addresses = 'localhost'"
+    state: present
+    backup: yes
+
+- name: make sure postgres is restarted
+  service: name=postgresql state=restarted
+
+- include: autobackups.yml
+  when: irods_db_backaup_enabled
+

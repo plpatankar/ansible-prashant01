@@ -1,0 +1,60 @@
+---
+- name: upgrade all packages
+  apt: update_cache=yes
+
+- name: install required packages
+  apt: pkg={{ item }} state=latest
+  with_items: 
+  - expect
+  - python-psycopg2
+
+- include: icat.yml
+  when: icat_enabled
+
+- include: resource.yml
+  when: not icat_enabled
+
+- name: test if irods is already installed and running
+  shell: ps awx | grep irodsServer
+  register: ps_awx
+
+- debug: var=ps_awx
+
+- name: setup irods_server
+  shell: sudo /var/lib/irods/packaging/setup_irods.sh < /tmp/setup_irods.input
+  when: ps_awx.stdout_lines | length < 3
+#- name: setup irods server
+#  command: /tmp/setup_irods_with_expect
+#  register: setup_with_expect
+#  when: ps_awx.stdout_lines | length < 3
+
+- name: test if irods is already installed and running
+  shell: ps awx | grep irodsServer
+  register: ps_awx
+
+- fail: irods server is not up after setup command
+  when: ps_awx.stdout_lines | length < 3
+
+- name: Create irods_vault directory if it doesn't exists
+  file: path={{ irods_vault_dir }} state=directory owner={{ irods_service_account_name }}  group={{ irods_service_group_name }}
+
+- name: copy iinit expect script
+  template: src=iinit.sh dest=/tmp/iinit owner=ansible group=admin mode=0700
+
+- name: run iinit
+  command: /tmp/iinit
+  sudo: false
+
+- include: pam_authentication.yml
+  when: irods_pam_auth_enabled
+  tags: ssl_keys
+
+- include: hosts_config.yml
+  when: irods_hosts_config_enabled
+  tags: hosts_config
+
+- name: restart irods service
+  service: name=irods state=restarted enabled=true
+  tags:
+  - ssl_keys 
+  - hosts_config

@@ -1,0 +1,20 @@
+---
+# Creates initial iRODS resc tree structure
+#
+# $ ilsresc --tree
+# rootResc:passthru
+# └── replResc:replication
+#    ├── masterResc:passthru "read=1.1;write=1.1"
+#    │   └── irods-icatResc
+#    └── slaveResc1:passthru "read=0.9;write=0.9"
+#        └── irods-rescResc
+#
+
+- name: create rootResc if doesn't exist
+  include: root_resc.yml
+
+- name: create master (public) resource
+  include: resc_master.yml
+
+- name: create slave (private) resource(s)
+  include: resc_slave.yml

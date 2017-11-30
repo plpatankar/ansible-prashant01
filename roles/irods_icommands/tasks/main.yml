@@ -1,0 +1,9 @@
+---
+- name: download irods client package
+  get_url: url={{ irods_icommands_pkg_url }} dest=/tmp
+  register: get_client_pkg
+
+- debug: var=get_client_pkg.dest
+
+- name: install irods client rpms
+  apt: deb={{ get_client_pkg.dest }} state=installed

@@ -1,0 +1,5 @@
+---
+- name: Setup backup server
+  hosts: [backup_server]
+  roles: [backup_debian]
+  sudo: true

@@ -1,0 +1,15 @@
+---
+- name: place scripts
+  hosts: nfs_server
+  sudo: true
+  roles: 
+    - pipelines_irap_scripts
+  tags: scripts
+
+- name: pull docker image
+  hosts: docker_openlava_nodes
+  sudo: true
+  roles: 
+    - pipelines_irap_image
+  tags: image
+

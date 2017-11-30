@@ -1,0 +1,23 @@
+---
+- name: place irap scripts to NFS server  
+  copy: src={{ item }} dest=/export/iRAP/bin/{{ item }} owner=root group=root mode=0755
+  with_items: 
+  - 'irap_lsf'
+  - 'lsf_shared_code.sh'
+  - 'irap_fun.sh'
+  - 'setup_irap.sh'
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+    

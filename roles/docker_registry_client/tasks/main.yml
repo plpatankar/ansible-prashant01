@@ -1,0 +1,9 @@
+---
+- name: copy registry root CA certificate
+  copy: src="{{ registry_root_ca_crt_local }}" dest="/usr/local/share/ca-certificates/docker-registry-root-ca.crt"
+
+- name: update CA certificates
+  shell: update-ca-certificates
+
+- name: restart docker daemon
+  service: name=docker state=restarted

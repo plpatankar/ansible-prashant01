@@ -1,0 +1,14 @@
+---
+- name: Set up DNS server
+  hosts: dns_master
+  sudo: true
+  roles: 
+    - dns
+  tags: dns_master
+
+- name: Fix DNS settings
+  hosts: all:!local:!bastion
+  sudo: true
+  roles: 
+    - dns_fix
+  tags: dns_fix

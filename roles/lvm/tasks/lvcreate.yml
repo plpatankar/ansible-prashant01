@@ -1,0 +1,32 @@
+---
+- name: check if LV exists
+  shell: lvdisplay | grep /dev/{{ vg_name }}/{{ lv_name }} | wc -l
+  register: lvdisplay_out
+
+- name: check the free space in VG
+  shell: sudo vgs --rows --units G {{ vg_name }} | grep VFree | awk '{ split($2,a,"."); print a[1] }'
+  register: free_space
+
+- set_fact:
+    lv_size: "{{ free_space.stdout_lines[0] }}"
+    lv_create: "{{ lvdisplay_out.stdout_lines[0] | int == 0 }}"
+
+- debug: var=lv_size
+
+- debug: var=lv_create
+
+- name: create LV
+  shell: lvcreate -l 100%FREE -n {{ lv_name }} {{ vg_name }}
+  when: lv_create
+
+- name: make a file system
+  shell: mkfs -t ext4 /dev/{{ vg_name }}/{{ lv_name }}
+  when: lv_create
+
+- name: extend LV
+  shell: lvextend -l +100%FREE /dev/{{ vg_name }}/{{ lv_name }}
+  when: (lv_create | bool == false) and (lv_size | int > 0)
+
+- name: resize filesystem after LV extend
+  shell: resize2fs /dev/{{ vg_name }}/{{ lv_name }}
+  when: (lv_create | bool == false) and (lv_size | int > 0)

@@ -1,0 +1,25 @@
+---
+- name: upgrade all packages
+  apt: update_cache=yes
+
+- name: install required packages
+  apt: pkg={{ item }} state=latest
+  with_items: 
+    - tcl-dev
+    - psmisc
+    - unzip
+
+- name: replace loopback for hostname
+  lineinfile: 
+    dest: /etc/hosts
+    regexp: '^127.0.1.1.*{{ ansible_hostname }}'
+    line: '#127.0.1.1 {{ ansible_hostname }}'
+
+- include: install_from_tarball.yml
+
+- include: post_install.yml
+  tags: post_install
+
+- include: docker_integration.yml
+  when: openlava_with_docker
+  tags: docker_integration

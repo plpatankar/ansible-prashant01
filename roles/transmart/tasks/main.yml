@@ -1,0 +1,252 @@
+---
+# Based on https://wiki.transmartfoundation.org/pages/viewpage.action?pageId=6619205
+# transmart will be available on http://localhost:8080/transmart/ with admin/admin 
+# on Cloud appropriate ports have to be opened and redirected 
+- name: step1 - add The Hyve package repository
+  shell: "{{ item }}"
+  with_items:
+  - "apt-key adv --keyserver keyserver.ubuntu.com --recv 3375DA21"
+  - "echo deb http://apt.thehyve.net/internal/ trusty main | tee /etc/apt/sources.list.d/hyve_internal.list"
+  - "apt-get update" 
+
+- name: upgrade all packages
+  apt: update_cache=yes
+
+- name: step2 - install required packages
+  apt: pkg={{ item }} state=latest
+  with_items:
+  - make
+  - curl
+  - git
+  - unzip
+  - openjdk-7-jdk  
+  - groovy
+  - php5-cli
+  - php5-json
+  - postgresql 
+  - postgresql-contrib
+  - autopostgresqlbackup
+  - python-psycopg2 
+  - apache2
+  - tomcat7 
+  - libtcnative-1 
+  - transmart-r
+  - nfs-common
+#  - postgresql-9.3 
+
+- name: step3a - make sure postgres is running
+  service: name=postgresql state=started enabled=yes
+
+- name: step3b - check if transmart-data exists
+  stat: path=transmart-data
+  register: transmart_data_stat
+
+- debug: var=transmart_data_stat.stat.exists
+
+- name: step3c - get transmart-data
+  shell: git clone https://github.com/transmart/transmart-data.git
+  sudo: no
+  when: not transmart_data_stat.stat.exists
+
+- name: step4 - configure transmart-data
+  shell: cd transmart-data && php env/vars-ubuntu.php > vars && source vars 
+  sudo: no
+  args:
+     executable: /bin/bash
+
+
+- name: step5a - check if transmart tablespace exists
+  stat: path=/var/lib/postgresql/tablespaces/transmart
+  register: transmart_tablespace_stat
+
+- debug: var=transmart_tablespace_stat.stat.exists
+
+- name: step5 - create transmart database table-spaces and schema
+  shell: cd transmart-data && source vars && sudo -u postgres bash -c "source vars; PGSQL_BIN=/usr/bin/ PGDATABASE=template1 make -C ddl/postgres/GLOBAL tablespaces" && make postgres warn=no
+  sudo: no
+  args:
+     executable: /bin/bash
+  when: not transmart_tablespace_stat.stat.exists
+
+- name: step6 - copy transmart configuration file
+  shell: cd transmart-data && bash -c "source vars; TSUSER_HOME=~tomcat7/ make -C config/ install"
+
+- name: step7a - install and run solr
+  shell: cd transmart-data && source vars && make -C solr solr_home
+  sudo: no
+  args:
+     executable: /bin/bash
+  ignore_errors: True
+
+- name: step7b - chown to tomcat7
+  shell: cd transmart-data && chown -R tomcat7 solr/solr
+
+- name: step7c - copy solr config 
+  template: src=solr.xml dest=/etc/tomcat7/Catalina/localhost/
+  sudo_user: tomcat7
+
+- name: step7d - tomcat7 start
+  service: name=tomcat7 state=started
+
+# Wait to give time for solr initialization
+- pause: minutes=2
+
+- name: step7e - tomcat7 stop
+  service: name=tomcat7 state=stopped
+
+- name: step7f - copy libs
+  shell: cp -a /home/ansible/transmart-data/solr/lib/ext/. /var/lib/tomcat7/webapps/solr/WEB-INF/lib/
+  sudo_user: tomcat7 
+
+- name: step7g - mkdir classes
+  file: path=/var/lib/tomcat7/webapps/solr/WEB-INF/classes state=directory
+  sudo_user: tomcat7 
+
+- name: step7h - copy classes
+  shell: cp /home/ansible/transmart-data/solr/resources/log4j.properties /var/lib/tomcat7/webapps/solr/WEB-INF/classes
+  sudo_user: tomcat7 
+
+- name: step8 - configure and start Rserve
+  shell: echo 'USER=tomcat7' | sudo tee /etc/default/rserve && sudo service rserve start
+  sudo: no 
+  ignore_errors: True
+
+# deploy applicantion from pre-built WAR
+#
+
+# from the hyve latest build
+
+- name: step9a1 - deploy tomcat7 web application on Tomcat
+  shell: sudo service tomcat7 stop && echo 'JAVA_OPTS="-Xmx4096M -XX:MaxPermSize=1024M"' | sudo tee /usr/share/tomcat7/bin/setenv.sh && sudo wget -P /var/lib/tomcat7/webapps/ https://ci.transmartfoundation.org/browse/DEPLOY-TRAPP/latestSuccessful/artifact/shared/transmart.war/transmart.war
+  sudo: no 
+  when: not transmart_source and not rcloud_support
+
+# from EBI pre-built WAR v1.2.0 with R Cloud support
+
+- name: step9a2 - deploy tomcat7 web application on Tomcat
+  shell: sudo service tomcat7 stop && echo 'JAVA_OPTS="-Xmx4096M -XX:MaxPermSize=1024M"' | sudo tee /usr/share/tomcat7/bin/setenv.sh && sudo wget -P /var/lib/tomcat7/webapps/ http://www.ebi.ac.uk/~andrew/transmart.war
+  sudo: no 
+  when: not transmart_source and rcloud_support
+
+# compile and deploy application from sources
+#
+- name: step9b1 prep - Grails SDK
+  #shell: curl -s get.gvmtool.net | bash
+  shell: curl -s get.sdkman.io | bash
+  when: transmart_source
+
+- name: step9b2 prep - Grails install
+  #shell: source /root/.sdkman/bin/sdkman-init.sh && yes|sdk install grails 2.3.7
+  shell: source ~/.sdkman/bin/sdkman-init.sh && yes|sdk install grails 2.3.7
+  args:
+     executable: /bin/bash
+  when: transmart_source
+
+# Download Web Application
+- name: step9b3 prep - Download Web Application
+  shell: git clone https://github.com/transmart/transmartApp.git && cd transmartApp && git fetch --tags && git checkout v1.2.0
+  sudo: no
+  ignore_errors: True
+  when: transmart_source
+
+- name: step9b4 prep - Download Core Application
+  shell: git clone https://github.com/transmart/transmart-core-api.git && cd transmart-core-api && git fetch --tags && git checkout v1.2.0
+  sudo: no
+  ignore_errors: True
+  when: transmart_source
+
+# create flders if they don't exist
+- name: step9c1 prep - make sure plugin folders exist
+  shell: mkdir -p /root/.grails/2.3.7/projects/transmart/plugins
+  ignore_errors: True
+  when: transmart_source and rcloud_support
+
+- name: step9c2 prep - make sure the plugin folder doesn't exist
+  shell: rm -rf /root/.grails/2.3.7/projects/transmart/plugins/Rmodules
+  ignore_errors: True
+  when: transmart_source and rcloud_support
+
+- name: step9c3 prep - make sure the plugin folder doesn't exist
+  shell: rm -rf /root/.grails/2.3.7/projects/transmart/plugins/rdc-rmodules-1.2.0
+  ignore_errors: True
+  when: transmart_source and rcloud_support
+
+- name: step9c4 prep - fetch RDC module with R Cloud support
+  shell: cd /root/.grails/2.3.7/projects/transmart/plugins/ && git clone https://github.com/andrewtikhonov/Rmodules.git && mv Rmodules rdc-rmodules-1.2.0 && cd rdc-rmodules-1.2.0 && git fetch --tags && git checkout v1.2.0.RCloud
+  ignore_errors: True
+  when: transmart_source and rcloud_support
+
+- name: step9d prep - create transmartApp war
+  shell: cd /home/ansible/transmart-data && bash -c "source vars; TSUSER_HOME=~tomcat7/ make -C config/ install" && cd /home/ansible/transmartApp && source ~/.sdkman/bin/sdkman-init.sh && grails prod war
+  args:
+     executable: /bin/bash
+  when: transmart_source
+
+- name: step9e - deploy tomcat7 web application on Tomcat
+  shell: sudo service tomcat7 stop && echo 'JAVA_OPTS="-Xmx4096M -XX:MaxPermSize=1024M"' | sudo tee /usr/share/tomcat7/bin/setenv.sh && sudo cp /home/ansible/transmartApp/target/transmart.war /var/lib/tomcat7/webapps/
+  sudo: no
+  when: transmart_source 
+
+- name: step9f - remove transmart-data folder
+  file: path=/usr/share/tomcat7/.grails/transmartConfig/ state=directory
+  sudo_user: tomcat7
+
+- name: step9g2 - copy transmart config to enable R Cloud integration
+  copy: src=Config.groovy dest=/usr/share/tomcat7/.grails/transmartConfig/ owner=tomcat7 group=tomcat7 mode=0644
+  sudo: yes
+  when: rcloud_support
+
+- name: step9g3 - create transmart mount point
+  shell: mkdir -p /mnt/nfs/rcloud/storage/tempdir
+  sudo: yes
+  ignore_errors: True
+  when: rcloud_support 
+  tags: "MOUNT"
+
+- name: step9g4 - check if /mnt/nfs/rcloud/storage/tempdir/transmart is mounted
+  stat: path=/mnt/nfs/rcloud/storage/tempdir/transmart
+  register: transmart_mounted_stat
+
+- name: step9g5 - mount transmart working directory
+  shell: mount {{groups.nfsserver[0]}}:/rcloud/storage/tempdir /mnt/nfs/rcloud/storage/tempdir
+  sudo: yes
+  when: rcloud_support and not transmart_mounted_stat.stat.exists
+  tags: "MOUNT"
+
+- name: step9g6 - create transmart working directory
+  file: path=/mnt/nfs/rcloud/storage/tempdir/transmart state=directory
+  sudo: yes
+  sudo_user: tomcat7
+  ignore_errors: True
+  when: rcloud_support 
+  tags: "MOUNT"
+
+- name: step9g7 - update fstab
+  lineinfile: 
+    dest: "/etc/fstab"
+    regexp: '^{{groups.nfsserver[0]}}:/rcloud.*'
+    line: "{{groups.nfsserver[0]}}:/rcloud/storage/tempdir /mnt/nfs/rcloud/storage/tempdir nfs4 rw,bg,soft,intr,lock,ac,tcp,nfsvers=4,timeo=1800 0 0"
+    state: present
+  when: rcloud_support
+  sudo: yes
+  tags: "MOUNT"
+
+- name: step9h - tomcat7 start
+  service: name=tomcat7 state=started
+  tags: "MOUNT"
+
+# Load examples
+- name: step10 - prepare ETL environment
+  shell: cd transmart-data && source vars && make -C env/ data-integration && make -C env/ update_etl
+  sudo: no
+  tags: "MOUNT"
+  args:
+     executable: /bin/bash
+
+- name: step11 - upload examples studies
+  shell: cd transmart-data && source vars && make -C samples/postgres load_clinical_GSE8581 && make -C samples/postgres load_ref_annotation_GSE8581 && make -C samples/postgres load_expression_GSE8581
+  sudo: no
+  tags: "MOUNT"
+  args:
+     executable: /bin/bash
+
