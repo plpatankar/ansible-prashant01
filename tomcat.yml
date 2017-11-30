@@ -1,0 +1,7 @@
+---
+- name: setup openlava cluster
+  hosts: RHEL7
+  roles:
+    - role: tomcat
+  become: true
+  become_user: root
