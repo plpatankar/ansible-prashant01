@@ -1,7 +1,8 @@
 ---
-- name: Inastall tomcat
+- name: Install Java
   hosts: RHEL7
   roles:
-    - role: tomcat
+    - role: java
   become: true
   become_user: root
+
