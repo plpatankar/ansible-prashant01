@@ -1,0 +1,31 @@
+---
+
+instance_type: t2.micro
+# Change the security group name here
+security_group: ppp-security-group 
+# This is an amazon AMI
+image: ami-55ef662f
+# This is one of my keys that i already have in AWS
+keypair: Key001 
+# Change the Region
+region: us-east-1 
+count: 1
+zone: us-east-1a
+vpc_subnet: subnet-aaa4fef0
+hosts_ini_file: "./hosts.ini"
+host_tag: "webserver"
+
+## VPC vars
+vpc_cidr_block: "10.10.0.0/16"
+vpc_tenancy: "Default"
+vpc_name: "ansible_vpc"
+vpc_region: us-east-1
+
+## SG vars
+sg_name: "ansible_SG"
+sg_region: "us-east-1"
+sg_inbound_rules: [{ "proto": "tcp", "from_port": 22, "to_port": 22, "cidr_ip": '0.0.0.0/0'}, 
+                   { "proto": "tcp", "from_port": 80, "to_port": 80, "cidr_ip": '0.0.0.0/0'}, 
+                   { "proto": "tcp", "from_port": 443, "to_port": 443, "cidr_ip": '0.0.0.0/0'}]
+		
+sg_outbound_rules: [{ "proto": "all", "cidr_ip": '0.0.0.0/0' }]

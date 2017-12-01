@@ -1,0 +1,13 @@
+---
+
+# Create a VPC with dedicate tenancy and a couple of tags
+
+- name: Create new VPC with given configurations
+  ec2_vpc_net:
+    name: {{ vpc_name }}
+    cidr_block: {{ vpc_cidr_block }}
+    region: {{ vpc_region }}
+    tags:
+      auto-gen-source: "ansible"
+    tenancy: {{ vpc_tenancy }}
+  register: ansible_vpc

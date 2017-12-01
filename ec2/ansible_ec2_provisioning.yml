@@ -1,0 +1,12 @@
+---
+- name: Provision an EC2 Instance
+  hosts: local
+  connection: local
+  connection: local
+  pre_tasks:
+    - { include: ../roles/ec2/tasks/create_vpc.yml, tags: [ 'create', 'createvpc' ] }
+    - { include: ../roles/ec2/tasks/create_security_group.yml, tags: [ 'create', 'createsg'] }
+  roles:
+      - { role: ec2 }
+
+

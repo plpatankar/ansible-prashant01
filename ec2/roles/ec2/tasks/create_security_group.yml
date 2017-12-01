@@ -1,0 +1,11 @@
+---
+
+- name: Create new security group
+  local_action: 
+    module: ec2_group
+    name: "{{ sg_name }}"
+    description: Security Group for webserver Servers
+    region: "{{ sg_region }}"
+    rules: {{ sg_inbound_rules }} 
+    rules_egress: {{ sg_outbound_rules }}
+  register: basic_firewall
