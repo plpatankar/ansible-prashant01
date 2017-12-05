@@ -1,0 +1,11 @@
+---
+
+- name: Install python pip
+  yum: name={{ item }} state=present
+  with_items:
+    - python-pip
+  
+- name: Install boto
+  command: python-pip install {{ item }}
+  with_items:
+     - boto3
