@@ -1,4 +1,4 @@
-Ansible playboot to setup VPC, Subnets, Security group in AWS. Also launch ec2 instances and add public ips into hosts.ini
+Ansible playbook to setup VPC, Subnets, Security group in AWS. Also launch ec2 instances and add public ips into hosts.ini
 
 
 Running entire playboot will create vpc,subnet,security group along with ec2 instances. 
@@ -29,3 +29,12 @@ ansible-playbook -i hosts.ini ansible_ec2_provisioning.yml -e@config_update.yml 
 Limitations:
  - need to use existing ssh key for ec2, no playbook to create key.
  - Although hosts.ini adds newly created instances, however does not cover dymanic host addition changes.
+
+## Authors
+
+* **Prashant Patankar** - *Initial work* - [plpatankar](https://github.com/plpatankar)
+
+## License
+
+This project is licensed under the ATMF Team License - see the [LICENSE.md](LICENSE.md) file for details
+
