@@ -4,8 +4,13 @@
   local_action: 
     module: ec2_group
     name: "{{ sg_name }}"
+    vpc_id: "{{ sg_vpc }}"
     description: Security Group for webserver Servers
+    tags:
+      source: "ansible"
     region: "{{ sg_region }}"
-    rules: sg_inbound_rules 
-    rules_egress: sg_outbound_rules 
-  register: basic_firewall
+    rules: "{{ sg_inbound_rules }}"
+    rules_egress: "{{ sg_outbound_rules }}"
+    aws_access_key: "{{ec2_access_key}}"
+    aws_secret_key: "{{ec2_secret_key}}"
+  register: sg_group

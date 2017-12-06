@@ -1,8 +1,10 @@
 ---
 
+# ec2
+ec2-ssh-timeout: 30
 instance_type: t2.micro
 # Change the security group name here
-security_group: ppp-security-group 
+security_group: "{{ sg_group.group_name }}"
 # This is an amazon AMI
 image: ami-55ef662f
 # This is one of my keys that i already have in AWS
@@ -11,19 +13,28 @@ keypair: Key001
 region: us-east-1 
 count: 1
 zone: us-east-1a
-vpc_subnet: subnet-aaa4fef0
-hosts_ini_file: "./hosts.ini"
-host_tag: "webserver"
+vpc_subnet: "{{ ansible_subnet.subnet.id }}"
+hosts_ini_file: "hosts.ini"
+host_tag: 
+   name: webserver
+   source: ansible
 
-## VPC vars
+## V P C  V A R S
 vpc_cidr_block: "10.10.0.0/16"
 vpc_tenancy: default
 vpc_name: "ansible_vpc"
-vpc_region: "us-east-1"
+vpc_region: "{{ region }}"
 
-## SG vars
+## S U B N E T   V A R S
+subnet_cidr: "10.10.0.0/24"
+subnet_vpc: "{{ ansible_vpc.vpc.id }}"
+subnet_region: "{{ region }}"
+subnet_public_ip: true
+
+## S E C U R I T Y  G R O U P  V A R S
 sg_name: "ansible_SG"
-sg_region: "us-east-1"
+sg_region: "{{ region }}"
+sg_vpc: "{{ ansible_vpc.vpc.id }}"
 
 sg_inbound_rules:
     - proto: tcp
@@ -31,8 +42,8 @@ sg_inbound_rules:
       to_port: 22
       cidr_ip: '0.0.0.0/0'
     - proto: tcp
-      from_port: 80 
-      to_port: 80
+      from_port: 8080 
+      to_port: 8080
       cidr_ip: '0.0.0.0/0'
     - proto: tcp
       from_port: 443

@@ -1,0 +1,22 @@
+---
+
+# Create a VPC with dedicate tenancy and a couple of tags
+
+
+# create subnet under vpc
+- name: Create subnet under vpc
+  ec2_vpc_subnet:
+    state: present
+    aws_access_key: "{{ec2_access_key}}"
+    aws_secret_key: "{{ec2_secret_key}}"
+    vpc_id: "{{ subnet_vpc }}"
+    region: "{{ subnet_region }}"
+    cidr: "{{ subnet_cidr }}"
+    map_public: "{{ subnet_public_ip }}"
+    tags:
+      source: "ansible"
+    resource_tags:
+      source: "ansible"
+  register: ansible_subnet
+
+

@@ -1,0 +1,5 @@
+---
+
+# ec2
+security_group: ansible_SG
+
