@@ -1,5 +1,9 @@
 Ansible playbook to setup VPC, Subnets, Security group in AWS. Also launch ec2 instances and add public ips into hosts.ini
 
+Requirement:
+- ansible launch machine with RHEL or Centos
+- Python
+( Note: python-pip and boto3 will be installed by playbook ) 
 
 Running entire playboot will create vpc,subnet,security group along with ec2 instances. 
 ### playbook to run:
