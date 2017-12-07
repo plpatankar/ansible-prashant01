@@ -119,7 +119,6 @@ for host and group vars file with name 'tag_name_webserver' can be used under ho
 
 Further any provising configurations playbooks can executed over this dymanic inventory to configure the host according to needs. 
 
-
 Limitations:
  - need to use existing ssh key for ec2, no playbook to create key.
 
