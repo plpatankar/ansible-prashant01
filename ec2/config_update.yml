@@ -1,5 +1,10 @@
 ---
+## Add varaibles/configurations that needs to be overriden from defalut 
 
 # ec2
 security_group: ansible_SG
+
+# VPC
+
+# Security group
 
