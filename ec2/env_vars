@@ -1,7 +1,0 @@
-export AWS_ACCESS_KEY_ID="AKIAI7722LJF74RJFFLQ"
-export AWS_SECRET_ACCESS_KEY="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"
-export region="us-east-1"
-
-## use ec2.py and ec2.ini from given path
-export ANSIBLE_HOSTS="inventory/ec2.py"
-export EC2_INI_PATH="inventory/ec2.ini"
