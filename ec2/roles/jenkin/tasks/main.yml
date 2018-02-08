@@ -1,9 +1,4 @@
 ---
-
-- name: Update the software package repository
-  yum:
-    name: '*'
-    update_cache: yes
  
 - name: Install dependencies
   package:
