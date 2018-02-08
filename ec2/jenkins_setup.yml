@@ -1,0 +1,12 @@
+---
+- name: Install and setup Jenkins
+  hosts: jenkins
+  gather_facts: true
+  become: yes
+  become_method: sudo
+  pre_tasks:
+    - { include: roles/ec2/jenkin/yum_update_cache.yml, tags: [ 'cache' ] }
+  roles:
+      - { role: jenkin }
+
+
