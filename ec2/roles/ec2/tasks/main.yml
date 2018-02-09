@@ -20,7 +20,7 @@
   local_action: lineinfile 
     dest={{ hosts_ini_file }}
     regexp={{ item.public_ip }} 
-    insertafter="\[{{host_tag.name}}\]" line={{ item.public_ip }}
+    insertafter="\[{{host_tag.group}}\]" line={{ item.public_ip }}
   with_items: "{{ ec2.instances }}"
 
 
