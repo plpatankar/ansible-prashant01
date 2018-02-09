@@ -10,4 +10,4 @@
   command: pip install {{ item }}
   sudo: True
   with_items:
-     - boto3
+     - boto
