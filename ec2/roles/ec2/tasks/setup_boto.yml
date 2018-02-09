@@ -7,7 +7,7 @@
     - python-pip
   
 - name: Install boto
-  command: python-pip install {{ item }}
+  command: pip install {{ item }}
   sudo: True
   with_items:
      - boto3
