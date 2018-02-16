@@ -15,7 +15,7 @@ count: 1
 zone: us-east-1a
 vpc_subnet: "{{ ansible_subnet.subnet.id }}"
 # host.ini file path where you want new ips to be inserted into
-hosts_ini_file: "hosts.ini"
+hosts_ini_file: "inventory/hosts.ini"
 # tags to be added to newly created instances
 host_tag: 
    group: webserver
