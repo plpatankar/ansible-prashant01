@@ -14,10 +14,17 @@ region: us-east-1
 count: 1
 zone: us-east-1a
 vpc_subnet: "{{ ansible_subnet.subnet.id }}"
+# host.ini file path where you want new ips to be inserted into
 hosts_ini_file: "hosts.ini"
+# tags to be added to newly created instances
 host_tag: 
-   name: webserver
+   group: webserver
    source: ansible
+
+# tag name of the hosts under which ips to be added under ini file
+hosts_tag_group: "webserver"
+# list public ip in ini file True/False
+public_ip_in_ini: False
 
 ## V P C  V A R S
 vpc_cidr_block: "10.10.0.0/16"
