@@ -9,6 +9,7 @@
     region={{ region }} 
     keypair={{ keypair }}
     count={{count}}
+    volumes={{instance_volumes}}
     zone={{ zone }}
     vpc_subnet_id={{ vpc_subnet }}
     instance_tags={{ host_tag }}

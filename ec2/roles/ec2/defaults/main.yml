@@ -12,6 +12,19 @@ keypair: Key001
 # Change the Region
 region: us-east-1 
 count: 1
+
+# For volume to be added in instance
+instance_volumes:
+    - device_name: /dev/xvda
+      volume_type: gp2
+      volume_size: 8
+
+# For volume to be mounted from snapshot
+#instance_volumes:
+#    - device_name: /dev/sdb
+#      snapshot: snap-abcdef12
+#      volume_size: 10
+
 zone: us-east-1a
 vpc_subnet: "{{ ansible_subnet.subnet.id }}"
 # host.ini file path where you want new ips to be inserted into
